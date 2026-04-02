@@ -1,17 +1,43 @@
 # models/llm_hint_generator.py
 
 import os
-from openai import OpenAI
-from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
-# OpenAI 클라이언트 초기화
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# .env 파일 로드는 가능할 때만 수행
+if load_dotenv is not None:
+    load_dotenv()
 
 # GPT 모델 설정
 MODEL_NAME = "gpt-4o-mini"
+
+
+def _get_default_hint(answer):
+    return (
+        f"다시 한 번 주변을 둘러보세요. '{answer}'와 관련된 특별한 장소가 있을 거예요! 💡"
+    )
+
+
+def _get_openai_client():
+    """필요할 때만 OpenAI 클라이언트를 생성합니다."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None, None
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        print("⚠️ openai 패키지가 설치되지 않았습니다. 기본 힌트를 사용합니다.")
+        return None, api_key
+
+    try:
+        return OpenAI(api_key=api_key), api_key
+    except Exception as e:
+        print(f"⚠️ OpenAI 클라이언트 초기화 실패: {e}")
+        return None, api_key
 
 
 def generate_blip_hint(answer, blip_failed_questions=None):
@@ -31,10 +57,12 @@ def generate_blip_hint(answer, blip_failed_questions=None):
     """
 
     # API 키 확인
-    api_key = os.getenv("OPENAI_API_KEY")
+    client, api_key = _get_openai_client()
     if not api_key:
         print("⚠️ OPENAI_API_KEY가 설정되지 않았습니다. 기본 힌트를 사용합니다.")
-        return f"다시 한 번 주변을 둘러보세요. '{answer}'와 관련된 특별한 장소가 있을 거예요! 💡"
+        return _get_default_hint(answer)
+    if not client:
+        return _get_default_hint(answer)
 
     if blip_failed_questions is None:
         blip_failed_questions = []
@@ -114,7 +142,7 @@ def generate_blip_hint(answer, blip_failed_questions=None):
     except Exception as e:
         print(f"❌ Error generating hint with GPT: {e}")
         # 오류 발생 시 기본 힌트 반환
-        return f"다시 한 번 주변을 둘러보세요. '{answer}'와 관련된 특별한 장소가 있을 거예요! 💡"
+        return _get_default_hint(answer)
 
 
 
@@ -122,10 +150,12 @@ def generate_blip_hint(answer, blip_failed_questions=None):
 def generate_clip_hint(answer, clip_info):
 
     # API 키 확인
-    api_key = os.getenv("OPENAI_API_KEY")
+    client, api_key = _get_openai_client()
     if not api_key:
         print("⚠️ OPENAI_API_KEY가 설정되지 않았습니다. 기본 힌트를 사용합니다.")
-        return f"다시 한 번 주변을 둘러보세요. '{answer}'와 관련된 특별한 장소가 있을 거예요! 💡"
+        return _get_default_hint(answer)
+    if not client:
+        return _get_default_hint(answer)
 
     # clip_info
     failed_info = ""
@@ -219,7 +249,7 @@ def generate_clip_hint(answer, clip_info):
     except Exception as e:
         print(f"❌ Error generating hint with GPT: {e}")
         # 오류 발생 시 기본 힌트 반환
-        return f"다시 한 번 주변을 둘러보세요. '{answer}'와 관련된 특별한 장소가 있을 거예요! 💡"
+        return _get_default_hint(answer)
 
 
 
@@ -276,4 +306,3 @@ if __name__ == "__main__":
     print("\n생성된 힌트:")
     print(hint_2)
     print("\n" + "="*50 + "\n")
-
