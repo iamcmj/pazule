@@ -24,6 +24,51 @@ def load_missions2():
     return data.get("missions2", [])
 
 
+def _normalize_state(state):
+    """하위 호환성을 포함해 상태 파일을 표준 형태로 정규화합니다."""
+    if not state:
+        return None
+
+    normalized = {
+        "date": state.get("date"),
+        "answer1": state.get("answer1") or state.get("answer"),
+        "answer2": state.get("answer2"),
+        "hint1": state.get("hint1") or state.get("hint"),
+        "hint2": state.get("hint2"),
+    }
+
+    if all(
+        normalized.get(key)
+        for key in ("date", "answer1", "answer2", "hint1", "hint2")
+    ):
+        return normalized
+
+    return None
+
+
+def get_today_state(admin_choice1=None, admin_choice2=None):
+    """
+    오늘의 내부 미션 상태를 반환합니다.
+
+    Returns:
+        dict: {
+            "date": str,
+            "answer1": str,
+            "answer2": str,
+            "hint1": str,
+            "hint2": str,
+        }
+    """
+    answer1, answer2, hint1, hint2 = get_today_answers(admin_choice1, admin_choice2)
+    return {
+        "date": str(date.today()),
+        "answer1": answer1,
+        "answer2": answer2,
+        "hint1": hint1,
+        "hint2": hint2,
+    }
+
+
 def get_today_answer(admin_choice=None, mission_type=None):
     """
     오늘의 정답과 힌트를 가져옵니다.
@@ -42,13 +87,12 @@ def get_today_answer(admin_choice=None, mission_type=None):
     if not admin_choice:
         try:
             with open(STATE_FILE, "r", encoding="utf-8") as f:
-                state = json.load(f)
-                if state.get("date") == today:
+                state = _normalize_state(json.load(f))
+                if state and state.get("date") == today:
                     # mission_type에 따라 다른 힌트 반환
-                    if mission_type == "photo" and "hint2" in state:
-                        return state["answer"], state["hint2"]
-                    elif "hint" in state:
-                        return state["answer"], state["hint"]
+                    if mission_type == "photo":
+                        return state["answer2"], state["hint2"]
+                    return state["answer1"], state["hint1"]
         except FileNotFoundError:
             print("⚠️ current_answer.json이 아직 없습니다. 새로 생성합니다.")
 
@@ -95,17 +139,13 @@ def get_today_answers(admin_choice1=None, admin_choice2=None):
                 with open(STATE_FILE, "r", encoding="utf-8") as f:
                     content = f.read().strip()
                     if content:  # 내용이 있는 경우에만 파싱 시도
-                        state = json.loads(content)
-                        if state.get("date") == today:
+                        state = _normalize_state(json.loads(content))
+                        if state and state.get("date") == today:
                             # 오늘 날짜면 기존 값 반환
-                            answer1 = state.get("answer1") or state.get(
-                                "answer"
-                            )  # 하위 호환성
-                            answer2 = state.get("answer2")
-                            hint1 = state.get("hint") or state.get(
-                                "hint1"
-                            )  # 하위 호환성
-                            hint2 = state.get("hint2")
+                            answer1 = state["answer1"]
+                            answer2 = state["answer2"]
+                            hint1 = state["hint1"]
+                            hint2 = state["hint2"]
                             if answer1 and answer2 and hint1 and hint2:
                                 return answer1, answer2, hint1, hint2
             except (json.JSONDecodeError, ValueError, KeyError) as e:
